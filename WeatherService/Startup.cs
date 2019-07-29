@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Polly;
+using Polly.Wrap;
 
 namespace WeatherService
 {
@@ -25,14 +26,14 @@ namespace WeatherService
             IAsyncPolicy<HttpResponseMessage> httpWaitAndRetryPolicy =
                 Policy.HandleResult<HttpResponseMessage>(r => !r.IsSuccessStatusCode)
                     .WaitAndRetryAsync(3, retryAttempt => TimeSpan.FromSeconds(retryAttempt),
-                        ((result, span, retryCount, ctx) => Console.WriteLine($"Retrying({retryCount})...") )
+                        (result, span, retryCount, ctx) => Console.WriteLine($"Retrying({retryCount})...") 
                     );
 
-            var fallbackPolicy =
+            IAsyncPolicy<HttpResponseMessage> fallbackPolicy =
                 Policy.HandleResult<HttpResponseMessage>(r => !r.IsSuccessStatusCode)
                     .FallbackAsync(FallbackAction, OnFallbackAsync);
 
-            var wrapOfRetryAndFallback = Policy.WrapAsync(fallbackPolicy, httpWaitAndRetryPolicy);
+            IAsyncPolicy<HttpResponseMessage> wrapOfRetryAndFallback = Policy.WrapAsync(fallbackPolicy, httpWaitAndRetryPolicy);
 
             services.AddHttpClient("TemperatureService", client =>
             {
@@ -51,8 +52,9 @@ namespace WeatherService
 
         private Task<HttpResponseMessage> FallbackAction(DelegateResult<HttpResponseMessage> responseToFailedRequest, Context context, CancellationToken cancellationToken)
         {
-            Console.WriteLine("Fallback action is executing");
+            Console.WriteLine("Fallback action is executing...");
 
+            Console.WriteLine("\n\tSending message to admin\n");
             HttpResponseMessage httpResponseMessage = new HttpResponseMessage(responseToFailedRequest.Result.StatusCode)
             {
                 Content = new StringContent($"The fallback executed, the original error was {responseToFailedRequest.Result.ReasonPhrase}")
